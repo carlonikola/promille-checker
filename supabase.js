@@ -1,7 +1,7 @@
 // ═══ SUPABASE CONFIG ═══
 // HIER DEINE DATEN EINFÜGEN:
 const SUPABASE_URL = 'https://teqoajmnqrdantvrbcgs.supabase.co';
-const SUPABASE_KEY = 'DEIN_API_KEY_HIER_EINFUEGEN'; // ← Project Settings → API → anon/public
+const SUPABASE_KEY = 'sb_publishable__rl4Ft5kUTrS2dTNFsg2Lw_qpuIPvMY'; // ← Project Settings → API → anon/public
 
 // Supabase CDN laden
 const script = document.createElement('script');
