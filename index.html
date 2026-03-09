@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0a0b10">
+    <meta name="description" content="PromilleTracker - Dein smarter Alkoholrechner mit KI-Analyse">
+    <title>PromilleTracker</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel für JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- DM Sans Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        html, body {
+            height: 100%;
+            background: #0a0b10;
+            color: #dde0ee;
+            font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            overflow: hidden;
+        }
+        
+        #root {
+            height: 100%;
+        }
+        
+        /* Scrollbar hide */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+        
+        /* Animations */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(24px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes pop {
+            0%, 100% { transform: scale(1); }
+            40% { transform: scale(1.08); }
+        }
+        
+        @keyframes toast {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .animate-fadeUp { animation: fadeUp 0.25s ease; }
+        .animate-slideUp { animation: slideUp 0.22s ease; }
+        .animate-pop { animation: pop 0.3s ease; }
+        .animate-toast { animation: toast 0.2s ease; }
+        .animate-pulse { animation: pulse 2s infinite; }
+        
+        /* Touch feedback */
+        .tap:active {
+            opacity: 0.7;
+            transform: scale(0.96);
+        }
+        
+        .tap {
+            transition: all 0.1s ease;
+            cursor: pointer;
+        }
+        
+        .hov {
+            transition: all 0.15s ease;
+        }
+        
+        .hov:hover {
+            border-color: rgba(255,255,255,0.15) !important;
+            transform: translateY(-1px);
+        }
+        
+        /* Input styling */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        
+        input[type="time"] {
+            color-scheme: dark;
+        }
+        
+        select {
+            appearance: none;
+        }
+        
+        /* Safe area for mobile */
+        @supports (padding: max(0px)) {
+            .safe-bottom {
+                padding-bottom: max(8px, env(safe-area-inset-bottom));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel" src="app.js"></script>
+</body>
+</html>
