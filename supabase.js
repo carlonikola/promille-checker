@@ -1,9 +1,7 @@
 // ═══ SUPABASE CONFIG ═══
-// HIER DEINE DATEN EINFÜGEN:
 const SUPABASE_URL = 'https://teqoajmnqrdantvrbcgs.supabase.co';
-const SUPABASE_KEY = 'sb_publishable__rl4Ft5kUTrS2dTNFsg2Lw_qpuIPvMY'; // ← Project Settings → API → anon/public
+const SUPABASE_KEY = 'DEIN_API_KEY_HIER_EINFUEGEN'; // ← Project Settings → API → anon/public
 
-// Supabase CDN laden
 const script = document.createElement('script');
 script.src = 'https://unpkg.com/@supabase/supabase-js@2';
 script.onload = () => {
@@ -23,10 +21,7 @@ async function signUp(email, password, name) {
 }
 
 async function signIn(email, password) {
-  const { data, error } = await window.supabaseClient.auth.signInWithPassword({
-    email,
-    password
-  });
+  const { data, error } = await window.supabaseClient.auth.signInWithPassword({ email, password });
   return { data, error };
 }
 
@@ -46,7 +41,7 @@ async function getUser() {
   return user;
 }
 
-// ═══ DATABASE FUNCTIONS ═══
+// ═══ PROFILE FUNCTIONS ═══
 async function saveProfileToCloud(profile) {
   const user = await getUser();
   if (!user) return { error: 'Not logged in' };
@@ -56,6 +51,7 @@ async function saveProfileToCloud(profile) {
     .upsert({ 
       id: user.id,
       name: profile.name,
+      display_name: profile.display_name || profile.name,
       weight: profile.weight,
       gender: profile.gender,
       country: profile.country,
@@ -77,29 +73,120 @@ async function loadProfileFromCloud() {
   return { data, error };
 }
 
-async function saveSessionToCloud(sessionData, mealsData) {
+// ═══ SESSION FUNCTIONS ═══
+async function createSession(roomName) {
+  const user = await getUser();
+  if (!user) return { error: 'Not logged in' };
+  
+  const roomCode = Math.floor(1000 + Math.random() * 9000).toString();
+  
+  const { data, error } = await window.supabaseClient
+    .from('drinking_sessions')
+    .insert({
+      user_id: user.id,
+      room_name: roomName,
+      room_code: roomCode,
+      drinks: [],
+      meals: [],
+      is_host: true,
+      display_name: user.user_metadata?.name || 'Gast',
+      current_bac: 0,
+      drink_count: 0,
+      created_at: new Date().toISOString()
+    })
+    .select()
+    .single();
+  
+  return { data, error };
+}
+
+async function joinSession(roomCode) {
+  const user = await getUser();
+  if (!user) return { error: 'Not logged in' };
+  
+  // Prüfe ob Session existiert
+  const { data: existingSession, error: findError } = await window.supabaseClient
+    .from('drinking_sessions')
+    .select('*')
+    .eq('room_code', roomCode)
+    .single();
+  
+  if (findError || !existingSession) return { error: 'Session nicht gefunden' };
+  
+  // Erstelle eigene Session-Eintrag für diesen User im selben Raum
+  const { data, error } = await window.supabaseClient
+    .from('drinking_sessions')
+    .insert({
+      user_id: user.id,
+      room_name: existingSession.room_name,
+      room_code: roomCode,
+      drinks: [],
+      meals: [],
+      is_host: false,
+      display_name: user.user_metadata?.name || 'Gast',
+      current_bac: 0,
+      drink_count: 0,
+      created_at: new Date().toISOString()
+    })
+    .select()
+    .single();
+  
+  return { data, error };
+}
+
+async function updateSessionData(roomCode, sessionData, mealsData, bac, drinkCount) {
   const user = await getUser();
   if (!user) return { error: 'Not logged in' };
   
   const { error } = await window.supabaseClient
     .from('drinking_sessions')
-    .insert({
-      user_id: user.id,
+    .update({
       drinks: sessionData,
       meals: mealsData || [],
-      created_at: new Date().toISOString()
-    });
+      current_bac: bac,
+      drink_count: drinkCount,
+      updated_at: new Date().toISOString()
+    })
+    .eq('room_code', roomCode)
+    .eq('user_id', user.id);
+  
   return { error };
 }
 
-async function getSessionHistory() {
-  const user = await getUser();
-  if (!user) return { data: [], error: 'Not logged in' };
-  
+async function getSessionLeaderboard(roomCode) {
   const { data, error } = await window.supabaseClient
     .from('drinking_sessions')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false });
+    .select('user_id, display_name, current_bac, drink_count, is_host')
+    .eq('room_code', roomCode)
+    .order('current_bac', { ascending: false });
+  
   return { data, error };
+}
+
+async function leaveSession(roomCode) {
+  const user = await getUser();
+  if (!user) return { error: 'Not logged in' };
+  
+  const { error } = await window.supabaseClient
+    .from('drinking_sessions')
+    .delete()
+    .eq('room_code', roomCode)
+    .eq('user_id', user.id);
+  
+  return { error };
+}
+
+// ═══ REALTIME SUBSCRIPTION ═══
+function subscribeToSession(roomCode, callback) {
+  return window.supabaseClient
+    .channel(`session_${roomCode}`)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'drinking_sessions',
+      filter: `room_code=eq.${roomCode}`
+    }, (payload) => {
+      callback(payload);
+    })
+    .subscribe();
 }
