@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0a0b10">
+    <meta name="description" content="PromilleTracker - Dein smarter Alkoholrechner mit Live-Sessions">
+    <title>PromilleTracker</title>
+
+    <!-- React -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html,
+        body {
+            height: auto;
+            min-height: 100%;
+            background: #0a0b10;
+            color: #dde0ee;
+            font-family: 'DM Sans', sans-serif;
+            overflow-y: auto;
+        }
+
+        #root {
+            min-height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #1e2132;
+            border-radius: 3px;
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(24px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pop {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            40% {
+                transform: scale(1.08);
+            }
+        }
+
+        @keyframes toast {
+            from {
+                opacity: 0;
+                transform: translateY(6px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .tap:active {
+            opacity: 0.7;
+            transform: scale(0.96);
+        }
+
+        .tap {
+            transition: all 0.1s ease;
+            cursor: pointer;
+        }
+
+        .hov {
+            transition: all 0.15s ease;
+        }
+
+        .hov:hover {
+            border-color: rgba(255, 255, 255, 0.15) !important;
+            transform: translateY(-1px);
+        }
+
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+        }
+
+        input[type="time"] {
+            color-scheme: dark;
+        }
+
+        select {
+            appearance: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+    <script type="text/babel" src="supabase.js"></script>
+    <script type="text/babel" src="auth.js"></script>
+    <script type="text/babel" src="app.js"></script>
+</body>
+
+</html>
