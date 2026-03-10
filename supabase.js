@@ -74,60 +74,67 @@ async function loadProfileFromCloud() {
 }
 
 // ═══ SESSION FUNCTIONS ═══
-async function createSession(roomName) {
+async function createSession(roomName, displayName) {
   const user = await getUser();
-  if (!user) return { error: 'Not logged in' };
-
+  const sync_id = user ? user.id : getSyncId();
   const roomCode = Math.floor(1000 + Math.random() * 9000).toString();
+
+  const payload = {
+    room_name: roomName,
+    room_code: roomCode,
+    sync_id: sync_id,
+    drinks: [],
+    meals: [],
+    is_host: true,
+    display_name: displayName || (user ? user.user_metadata?.name : 'Gast'),
+    current_bac: 0,
+    drink_count: 0,
+    created_at: new Date().toISOString()
+  };
+
+  if (user) payload.user_id = user.id;
 
   const { data, error } = await window.supabaseClient
     .from('drinking_sessions')
-    .insert({
-      user_id: user.id,
-      room_name: roomName,
-      room_code: roomCode,
-      drinks: [],
-      meals: [],
-      is_host: true,
-      display_name: user.user_metadata?.name || 'Gast',
-      current_bac: 0,
-      drink_count: 0,
-      created_at: new Date().toISOString()
-    })
+    .upsert(payload, { onConflict: 'room_code, sync_id' })
     .select()
     .single();
 
   return { data, error };
 }
 
-async function joinSession(roomCode) {
+async function joinSession(roomCode, displayName) {
   const user = await getUser();
-  if (!user) return { error: 'Not logged in' };
+  const sync_id = user ? user.id : getSyncId();
 
   // Prüfe ob Session existiert
   const { data: existingSession, error: findError } = await window.supabaseClient
     .from('drinking_sessions')
     .select('*')
     .eq('room_code', roomCode)
+    .limit(1)
     .single();
 
   if (findError || !existingSession) return { error: 'Session nicht gefunden' };
 
-  // Erstelle eigene Session-Eintrag für diesen User im selben Raum
+  const payload = {
+    room_name: existingSession.room_name,
+    room_code: roomCode,
+    sync_id: sync_id,
+    drinks: [],
+    meals: [],
+    is_host: false,
+    display_name: displayName || (user ? user.user_metadata?.name : 'Gast'),
+    current_bac: 0,
+    drink_count: 0,
+    created_at: new Date().toISOString()
+  };
+
+  if (user) payload.user_id = user.id;
+
   const { data, error } = await window.supabaseClient
     .from('drinking_sessions')
-    .insert({
-      user_id: user.id,
-      room_name: existingSession.room_name,
-      room_code: roomCode,
-      drinks: [],
-      meals: [],
-      is_host: false,
-      display_name: user.user_metadata?.name || 'Gast',
-      current_bac: 0,
-      drink_count: 0,
-      created_at: new Date().toISOString()
-    })
+    .upsert(payload, { onConflict: 'room_code, sync_id' })
     .select()
     .single();
 
@@ -169,7 +176,7 @@ async function updateSessionData(roomCode, sessionData, mealsData, bac, drinkCou
 async function getSessionLeaderboard(roomCode) {
   const { data, error } = await window.supabaseClient
     .from('drinking_sessions')
-    .select('user_id, display_name, current_bac, drink_count, is_host')
+    .select('sync_id, user_id, display_name, current_bac, drink_count, is_host')
     .eq('room_code', roomCode)
     .order('current_bac', { ascending: false });
 
