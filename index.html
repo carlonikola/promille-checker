@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#0a0b10">
-    <meta name="description" content="PromilleTracker - Dein smarter Alkoholrechner mit Cloud-Sync">
+    <meta name="description" content="PromilleTracker - Dein smarter Alkoholrechner mit Live-Sessions">
     <title>PromilleTracker</title>
     
     <!-- React -->
@@ -30,14 +30,13 @@
         .tap { transition: all 0.1s ease; cursor: pointer; }
         .hov { transition: all 0.15s ease; }
         .hov:hover { border-color: rgba(255,255,255,0.15) !important; transform: translateY(-1px); }
-        input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+        input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
         input[type="time"] { color-scheme: dark; }
         select { appearance: none; }
     </style>
 </head>
 <body>
     <div id="root"></div>
-    
     <script type="text/babel" src="supabase.js"></script>
     <script type="text/babel" src="auth.js"></script>
     <script type="text/babel" src="app.js"></script>
