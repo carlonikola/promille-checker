@@ -1,4 +1,4 @@
-const { useState, useEffect, useMemo } = React;
+const { useState, useEffect, useMemo, useRef } = React;
 
 // ═══ CONSTANTS ═══
 const COUNTRIES = [
@@ -186,14 +186,10 @@ function fmtTime(ts) {
   const d = new Date(ts);
   return d.getHours().toString().padStart(2,"0")+":"+d.getMinutes().toString().padStart(2,"0");
 }
-
 function tsFromTime(hhmm) {
   const [h,m] = hhmm.split(":").map(Number);
-  const d = new Date();
-  d.setHours(h,m,0,0);
-  return d.getTime();
+  const d = new Date(); d.setHours(h,m,0,0); return d.getTime();
 }
-
 function calcBac(entries, weight, gender, meals=[]) {
   if (!entries.length) return 0;
   const r = gender === "m" ? 0.7 : 0.6;
@@ -207,12 +203,10 @@ function calcBac(entries, weight, gender, meals=[]) {
   const elapsedH = (now - firstTs) / 3600000;
   return Math.max(0, rawBac - 0.15 * elapsedH);
 }
-
 function hitBac(d, w, g) {
   const r = g === "m" ? 0.7 : 0.6;
   return (d.vol * (d.abv/100) * 789) / (w * r);
 }
-
 function bacColor(v) {
   if (v <= 0)  return "#4ade80";
   if (v < 0.3) return "#4ade80";
@@ -227,12 +221,14 @@ function Modal({title, onClose, children}) {
   return (
     <div style={{position:"fixed",inset:0,zIndex:900,background:"rgba(0,0,0,.75)",display:"flex",alignItems:"flex-end"}}
       onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div style={{background:"#12141e",borderRadius:"22px 22px 0 0",padding:"22px 20px 36px",width:"100%",maxWidth:440,margin:"0 auto",border:"1px solid #1e2132",animation:"slideUp .22s ease",maxHeight:"88vh",overflowY:"auto"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+      <div style={{background:"#12141e",borderRadius:"22px 22px 0 0",padding:"22px 20px 16px",width:"100%",maxWidth:440,margin:"0 auto",border:"1px solid #1e2132",animation:"slideUp .22s ease",maxHeight:"88vh",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18,flexShrink:0}}>
           <div style={{fontSize:16,fontWeight:700}}>{title}</div>
           <div onClick={onClose} style={{color:"#555",fontSize:24,cursor:"pointer",lineHeight:1}}>×</div>
         </div>
-        {children}
+        <div style={{flex:1,minHeight:0,overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:12}}>
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -260,7 +256,6 @@ function TimePicker({value, onChange}) {
   ];
   const [custom, setCustom] = useState(false);
   const [customVal, setCustomVal] = useState(fmtTime(value));
-
   return (
     <div style={{marginBottom:16}}>
       <div style={{fontSize:10,color:"#555",textTransform:"uppercase",letterSpacing:1.2,marginBottom:8}}>Uhrzeit</div>
@@ -290,13 +285,15 @@ function TimePicker({value, onChange}) {
   );
 }
 
+// PLACEHOLDER — App component follows below
+
 // ═══ MAIN APP ═══
 function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  
+
   const [screen, setScreen] = useState("home");
-  const [profile, setProfile] = useState({name:"Gast", weight:75, gender:"m", country:"ch", novice:false});
+  const [profile, setProfile] = useState({name:"Gast", display_name:"Gast", weight:75, gender:"m", country:"ch", novice:false});
   const [session, setSession] = useState([]);
   const [drinks, setDrinks] = useState(DEFAULT_DRINKS);
   const [cat, setCat] = useState("Alle");
@@ -314,6 +311,16 @@ function App() {
   const [newMeal, setNewMeal] = useState({type:"🍽️ Mittagessen", desc:"", ts:Date.now()});
   const [pendingDrink, setPendingDrink] = useState(null);
   const [pendingTs, setPendingTs] = useState(Date.now());
+
+  // Gruppen-Session / Leaderboard
+  const [groupModalOpen, setGroupModalOpen] = useState(false);
+  const [roomNameInput, setRoomNameInput] = useState("");
+  const [joinCodeInput, setJoinCodeInput] = useState("");
+  const [activeRoom, setActiveRoom] = useState(null); // { roomCode, roomName, isHost }
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [sessionSyncLoading, setSessionSyncLoading] = useState(false);
+  const [sessionSyncError, setSessionSyncError] = useState(null);
+  const [sessionSub, setSessionSub] = useState(null);
 
   // Auth Check
   useEffect(() => {
@@ -334,6 +341,7 @@ function App() {
     if (profileData) {
       setProfile({
         name: profileData.name || user.user_metadata?.name || 'Benutzer',
+        display_name: profileData.display_name || profileData.name || user.user_metadata?.name || 'Benutzer',
         weight: profileData.weight || 75,
         gender: profileData.gender || 'm',
         country: profileData.country || 'ch',
@@ -356,9 +364,15 @@ function App() {
   async function handleLogout() {
     await signOut();
     setUser(null);
-    setProfile({name:"Gast", weight:75, gender:"m", country:"ch", novice:false});
+    setProfile({name:"Gast", display_name:"Gast", weight:75, gender:"m", country:"ch", novice:false});
     setSession([]);
     setMeals([]);
+    setActiveRoom(null);
+    setLeaderboard([]);
+    setGroupModalOpen(false);
+    if (sessionSub && typeof sessionSub.unsubscribe === "function") {
+      sessionSub.unsubscribe();
+    }
     window.location.reload();
   }
 
@@ -368,7 +382,7 @@ function App() {
     const savedDrinks = localStorage.getItem('pt_drinks');
     const savedSession = localStorage.getItem('pt_session');
     const savedMeals = localStorage.getItem('pt_meals');
-    
+
     if (savedProfile && !user) setProfile(JSON.parse(savedProfile));
     if (savedDrinks) setDrinks(JSON.parse(savedDrinks));
     if (savedSession) setSession(JSON.parse(savedSession));
@@ -397,7 +411,107 @@ function App() {
     return ()=>clearInterval(id);
   },[session,profile,meals]);
 
-  function toast_(msg){setToast(msg);setTimeout(()=>setToast(null),2800);}
+  useEffect(()=>{
+    return () => {
+      if (sessionSub && typeof sessionSub.unsubscribe === "function") {
+        sessionSub.unsubscribe();
+      }
+    };
+  },[sessionSub]);
+
+  async function refreshLeaderboard(roomCode) {
+    if (!roomCode) return;
+    const { data } = await getSessionLeaderboard(roomCode);
+    if (data) {
+      setLeaderboard(data.slice().sort((a,b)=>(b.current_bac||0)-(a.current_bac||0)));
+    }
+  }
+
+  function setupRealtime(roomCode) {
+    if (!roomCode || !window.supabaseClient) return;
+    if (sessionSub && typeof sessionSub.unsubscribe === "function") {
+      sessionSub.unsubscribe();
+    }
+    const ch = subscribeToSession(roomCode, () => {
+      refreshLeaderboard(roomCode);
+    });
+    setSessionSub(ch);
+  }
+
+  function toast_(msg){
+    setToast(msg);
+    setTimeout(()=>setToast(null),2800);
+  }
+
+  async function handleHostSession() {
+    if (!user) {
+      setSessionSyncError("Für Gruppen-Sessions bitte anmelden.");
+      return;
+    }
+    if (!roomNameInput.trim()) {
+      setSessionSyncError("Bitte einen Raumnamen eingeben.");
+      return;
+    }
+    setSessionSyncLoading(true);
+    setSessionSyncError(null);
+    const { data, error } = await createSession(roomNameInput.trim());
+    setSessionSyncLoading(false);
+    if (error || !data) {
+      setSessionSyncError(error?.message || "Fehler beim Erstellen der Session.");
+      return;
+    }
+    const info = { roomCode:data.room_code, roomName:data.room_name, isHost:data.is_host };
+    setActiveRoom(info);
+    setRoomNameInput("");
+    await refreshLeaderboard(info.roomCode);
+    setupRealtime(info.roomCode);
+    toast_(`Raum „${info.roomName}“ erstellt · Code ${info.roomCode}`);
+  }
+
+  async function handleJoinSession() {
+    if (!user) {
+      setSessionSyncError("Für Gruppen-Sessions bitte anmelden.");
+      return;
+    }
+    const code = joinCodeInput.trim();
+    if (code.length !== 4) {
+      setSessionSyncError("Bitte einen 4-stelligen Code eingeben.");
+      return;
+    }
+    setSessionSyncLoading(true);
+    setSessionSyncError(null);
+    const { data, error } = await joinSession(code);
+    setSessionSyncLoading(false);
+    if (error || !data) {
+      setSessionSyncError(error?.message || "Session nicht gefunden.");
+      return;
+    }
+    const info = { roomCode:data.room_code, roomName:data.room_name, isHost:data.is_host };
+    setActiveRoom(info);
+    await refreshLeaderboard(info.roomCode);
+    setupRealtime(info.roomCode);
+    toast_(`Session „${info.roomName}“ beigetreten · Code ${info.roomCode}`);
+  }
+
+  async function handleLeaveSession() {
+    if (!activeRoom) {
+      setActiveRoom(null);
+      setLeaderboard([]);
+      return;
+    }
+    if (user) {
+      setSessionSyncLoading(true);
+      await leaveSession(activeRoom.roomCode);
+      setSessionSyncLoading(false);
+    }
+    if (sessionSub && typeof sessionSub.unsubscribe === "function") {
+      sessionSub.unsubscribe();
+      setSessionSub(null);
+    }
+    setActiveRoom(null);
+    setLeaderboard([]);
+    toast_("Gruppen-Session verlassen");
+  }
 
   function confirmAddDrink() {
     if (!pendingDrink) return;
@@ -410,14 +524,22 @@ function App() {
     setTimeout(()=>setFlashIds(f=>{const c={...f};delete c[pendingDrink.id];return c;}),700);
     toast_(`${pendingDrink.icon} ${pendingDrink.name}  →  ${nb.toFixed(2)}‰`);
     setPendingDrink(null);
-    
-    if (user) saveSessionToCloud(next, meals);
+
+    if (user && activeRoom?.roomCode) {
+      updateSessionData(activeRoom.roomCode, next, meals, nb, next.length);
+      refreshLeaderboard(activeRoom.roomCode);
+    }
   }
 
   function removeEntry(sid){
     const next=session.filter(x=>x.sid!==sid);
     setSession(next);
-    setBac(calcBac(next,profile.weight,profile.gender,meals));
+    const nb = calcBac(next,profile.weight,profile.gender,meals);
+    setBac(nb);
+    if (user && activeRoom?.roomCode) {
+      updateSessionData(activeRoom.roomCode, next, meals, nb, next.length);
+      refreshLeaderboard(activeRoom.roomCode);
+    }
   }
 
   function saveDrink(){
@@ -425,13 +547,13 @@ function App() {
     setEditDrink(null);
     toast_("Gespeichert ✓");
   }
-  
+
   function deleteDrink(id){
     setDrinks(ds=>ds.filter(d=>d.id!==id));
     setEditDrink(null);
     toast_("Gelöscht");
   }
-  
+
   function addDrink(){
     if(!newDrink.name.trim())return;
     const d={...newDrink,id:"c_"+Date.now(),abv:+newDrink.abv,vol:+newDrink.vol,kcal:+newDrink.kcal};
@@ -448,17 +570,27 @@ function App() {
     setMeals(next);
     setShowAddMeal(false);
     setNewMeal({type:"🍽️ Mittagessen",desc:"",ts:Date.now()});
-    setBac(calcBac(session,profile.weight,profile.gender,next));
+    const nb = calcBac(session,profile.weight,profile.gender,next);
+    setBac(nb);
+    if (user && activeRoom?.roomCode) {
+      updateSessionData(activeRoom.roomCode, session, next, nb, session.length);
+      refreshLeaderboard(activeRoom.roomCode);
+    }
     toast_(`${m.type.split(" ")[0]} eingetragen`);
   }
-  
+
   function removeMeal(id){
     const next=meals.filter(m=>m.id!==id);
     setMeals(next);
-    setBac(calcBac(session,profile.weight,profile.gender,next));
+    const nb = calcBac(session,profile.weight,profile.gender,next);
+    setBac(nb);
+    if (user && activeRoom?.roomCode) {
+      updateSessionData(activeRoom.roomCode, session, next, nb, session.length);
+      refreshLeaderboard(activeRoom.roomCode);
+    }
   }
 
-  const filtered = useMemo(()=>{
+  const filtered = React.useMemo(()=>{
     let list=cat==="Alle"?drinks:drinks.filter(d=>d.cat===cat);
     if(search.trim()){const q=search.toLowerCase();list=list.filter(d=>d.name.toLowerCase().includes(q)||d.cat.toLowerCase().includes(q));}
     return list;
@@ -510,6 +642,120 @@ function App() {
   return (
     <div style={{minHeight:"100vh",background:"#0a0b10",color:"#dde0ee",fontFamily:"'DM Sans','Segoe UI',sans-serif",display:"flex",flexDirection:"column",maxWidth:440,margin:"0 auto"}}>
       {toast&&<div style={{position:"fixed",bottom:86,left:"50%",transform:"translateX(-50%)",zIndex:999,background:"#181b28",border:"1px solid #2a2e48",borderRadius:14,padding:"10px 20px",fontSize:13,fontWeight:500,animation:"toast .2s ease",boxShadow:"0 8px 32px #0008",whiteSpace:"nowrap",maxWidth:"88vw"}}>{toast}</div>}
+
+      {/* Gruppen-Session Modal */}
+      {groupModalOpen && (
+        <Modal title="Gruppen-Session" onClose={()=>setGroupModalOpen(false)}>
+          {!user ? (
+            <div style={{fontSize:13,color:"#bbb",lineHeight:1.6}}>
+              Bitte melde dich an, um eine Gruppen-Session zu nutzen.
+            </div>
+          ) : (
+            <div style={{display:"flex",flexDirection:"column",gap:14}}>
+              {activeRoom ? (
+                <div style={{background:"#0e1020",border:"1px solid #171a2a",borderRadius:14,padding:"12px 14px"}}>
+                  <div style={{fontSize:10,color:"#555",textTransform:"uppercase",letterSpacing:1.5,marginBottom:6}}>Aktiver Raum</div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                    <div>
+                      <div style={{fontSize:14,fontWeight:600}}>{activeRoom.roomName}</div>
+                      <div style={{fontSize:11,color:"#666",marginTop:2}}>
+                        {activeRoom.isHost ? "Du bist Host" : "Du bist Teilnehmer"}
+                      </div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:10,color:"#555",marginBottom:2}}>Code</div>
+                      <div style={{fontFamily:"'Space Mono',monospace",fontSize:20,fontWeight:700,letterSpacing:2}}>
+                        {activeRoom.roomCode}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{fontSize:11,color:"#444"}}>
+                    Teile den 4-stelligen Code mit deinen Freunden. Alle im selben Raum sehen sich im Leaderboard.
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div style={{background:"#0e1020",border:"1px solid #171a2a",borderRadius:14,padding:"12px 14px"}}>
+                    <div style={{fontSize:10,color:"#555",textTransform:"uppercase",letterSpacing:1.5,marginBottom:6}}>Session hosten</div>
+                    <Inp label="Raumname" value={roomNameInput} onChange={setRoomNameInput} placeholder="z.B. WG-Party, Stammtisch…" />
+                    <div className="tap" onClick={handleHostSession} style={{background:"#2563eb",borderRadius:10,padding:"10px",textAlign:"center",fontWeight:700,fontSize:13,opacity:sessionSyncLoading?0.7:1,cursor:sessionSyncLoading?"default":"pointer"}}>
+                      {sessionSyncLoading ? "Erstelle..." : "Raum erstellen & Code bekommen"}
+                    </div>
+                  </div>
+
+                  <div style={{background:"#0e1020",border:"1px solid #171a2a",borderRadius:14,padding:"12px 14px"}}>
+                    <div style={{fontSize:10,color:"#555",textTransform:"uppercase",letterSpacing:1.5,marginBottom:6}}>Session beitreten</div>
+                    <Inp label="Code (4-stellig)" value={joinCodeInput} onChange={v=>setJoinCodeInput(v.replace(/\D/g,"").slice(0,4))} placeholder="z.B. 4821" />
+                    <div className="tap" onClick={handleJoinSession} style={{background:"#1d283a",borderRadius:10,padding:"10px",textAlign:"center",fontWeight:700,fontSize:13,opacity:sessionSyncLoading?0.7:1,cursor:sessionSyncLoading?"default":"pointer"}}>
+                      {sessionSyncLoading ? "Verbinde..." : "Mit Code beitreten"}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {sessionSyncError && (
+                <div style={{background:"#1a0c0c",border:"1px solid #f8717130",borderRadius:10,padding:"8px 10px",fontSize:12,color:"#fca5a5"}}>
+                  {sessionSyncError}
+                </div>
+              )}
+
+              {activeRoom && (
+                <>
+                  <div style={{fontSize:10,color:"#555",textTransform:"uppercase",letterSpacing:1.5,marginTop:4,marginBottom:4}}>
+                    Live-Leaderboard
+                  </div>
+                  <div style={{background:"#0e1020",border:"1px solid #171a2a",borderRadius:14,padding:"10px 10px",maxHeight:260,overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
+                    {leaderboard.length===0 ? (
+                      <div style={{fontSize:12,color:"#555",textAlign:"center",padding:"14px 4px"}}>
+                        Noch keine Daten. Füge ein Getränk hinzu, um im Leaderboard zu erscheinen.
+                      </div>
+                    ) : (
+                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                        <thead>
+                          <tr style={{color:"#666",textAlign:"left"}}>
+                            <th style={{padding:"4px 4px",width:32}}>Rang</th>
+                            <th style={{padding:"4px 4px"}}>Name</th>
+                            <th style={{padding:"4px 4px",textAlign:"right"}}>Promille</th>
+                            <th style={{padding:"4px 0",textAlign:"right",width:40}}>Drinks</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {leaderboard.map((row,idx)=>{
+                            const isMe = user && row.user_id===user.id;
+                            const val = row.current_bac || 0;
+                            const rowColor = bacColor(val);
+                            return (
+                              <tr key={row.user_id} style={{background:isMe?rowColor+"12":"transparent"}}>
+                                <td style={{padding:"4px 4px",fontFamily:"'Space Mono',monospace",color:"#888"}}>{idx+1}.</td>
+                                <td style={{padding:"4px 4px",fontWeight:isMe?700:500}}>
+                                  {row.display_name || "Gast"}
+                                  {row.is_host && <span style={{fontSize:10,color:"#facc15",marginLeft:4}}>HOST</span>}
+                                </td>
+                                <td style={{padding:"4px 4px",textAlign:"right",fontFamily:"'Space Mono',monospace",color:rowColor,fontWeight:700}}>
+                                  {val.toFixed(2)}‰
+                                </td>
+                                <td style={{padding:"4px 0",textAlign:"right",fontFamily:"'Space Mono',monospace",color:"#888"}}>
+                                  {row.drink_count || 0}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                    <div style={{fontSize:10,color:"#444",marginTop:8,lineHeight:1.5}}>
+                      Nur der Anzeigename, aktuelle Promille und Anzahl der Drinks werden geteilt. Gewicht, Geschlecht und Alter bleiben privat.
+                    </div>
+                  </div>
+                  <div className="tap" onClick={handleLeaveSession} style={{background:"#180c0c",border:"1px solid #f8717125",borderRadius:10,padding:"9px",textAlign:"center",fontSize:12,color:"#fca5a5"}}>
+                    {sessionSyncLoading ? "Verlasse..." : "Session verlassen"}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </Modal>
+      )}
 
       {pendingDrink&&(
         <Modal title={`${pendingDrink.icon} ${pendingDrink.name} hinzufügen`} onClose={()=>setPendingDrink(null)}>
@@ -589,7 +835,7 @@ function App() {
               {bac.toFixed(2)}‰
             </div>
           )}
-          <UserMenu user={user} onLogout={handleLogout} />
+          <UserMenu user={user} onLogout={handleLogout} onShowSession={()=>setGroupModalOpen(true)} />
         </div>
       </div>
 
@@ -782,7 +1028,7 @@ function App() {
                 );
               })}
 
-              <div className="tap" onClick={()=>{setSession([]);setMeals([]);setBac(0);setScreen("home");toast_("Session zurückgesetzt");}}
+              <div className="tap" onClick={()=>{setSession([]);setMeals([]);setBac(0);setScreen("home");if (user && activeRoom?.roomCode) {updateSessionData(activeRoom.roomCode, [], [], 0, 0);refreshLeaderboard(activeRoom.roomCode);}toast_("Session zurückgesetzt");}}
                 style={{background:"#180c0c",border:"1px solid #f8717120",borderRadius:12,padding:"12px",textAlign:"center",fontSize:12,color:"#f87171",marginTop:8}}>
                 🗑 Session & Mahlzeiten zurücksetzen
               </div>
@@ -843,7 +1089,7 @@ function App() {
                   </div>
                 );
               })}
-              <div className="tap" onClick={()=>{setMeals([]);setBac(calcBac(session,profile.weight,profile.gender,[]));toast_("Mahlzeiten gelöscht");}}
+              <div className="tap" onClick={()=>{setMeals([]);const nb = calcBac(session,profile.weight,profile.gender,[]);setBac(nb);if (user && activeRoom?.roomCode) {updateSessionData(activeRoom.roomCode, session, [], nb, session.length);refreshLeaderboard(activeRoom.roomCode);}toast_("Mahlzeiten gelöscht");}}
                 style={{background:"#180c0c",border:"1px solid #f8717120",borderRadius:12,padding:"11px",textAlign:"center",fontSize:12,color:"#f87171",marginTop:8}}>
                 🗑 Alle Mahlzeiten löschen
               </div>
@@ -864,7 +1110,8 @@ function App() {
               {!editProfile?(
                 <div style={{display:"grid",gap:16}}>
                   {[
-                    {icon:"👤",label:"Name",val:profile.name},
+                    {icon:"👤",label:"Name (privat)",val:profile.name},
+                    {icon:"🏷️",label:"Anzeigename im Leaderboard",val:profile.display_name || profile.name},
                     {icon:"⚖️",label:"Gewicht",val:profile.weight+" kg"},
                     {icon:"🧬",label:"Geschlecht",val:profile.gender==="m"?"Männlich":"Weiblich"},
                     {icon:country.flag,label:"Land",val:country.name},
@@ -878,51 +1125,57 @@ function App() {
                   ))}
                 </div>
               ):(
-                <div style={{display:"grid",gap:14}}>
-                  {[{label:"Name",key:"name",type:"text"},{label:"Gewicht (kg)",key:"weight",type:"number"}].map(f=>(
-                    <div key={f.key}>
-                      <div style={{fontSize:10,color:"#444",marginBottom:6}}>{f.label}</div>
-                      <input type={f.type} value={tmpProf[f.key]} onChange={e=>setTmpProf(p=>({...p,[f.key]:f.type==="number"?+e.target.value:e.target.value}))} style={inp}/>
-                    </div>
-                  ))}
-                  <div>
-                    <div style={{fontSize:10,color:"#444",marginBottom:8}}>Geschlecht</div>
-                    <div style={{display:"flex",gap:10}}>
-                      {[["m","Männlich"],["f","Weiblich"]].map(([v,l])=>(
-                        <div key={v} className="tap" onClick={()=>setTmpProf(p=>({...p,gender:v}))}
-                          style={{flex:1,textAlign:"center",padding:"10px",borderRadius:10,fontSize:13,background:tmpProf.gender===v?"#2563eb":"#151826",border:`1px solid ${tmpProf.gender===v?"#2563eb":"#222638"}`,color:tmpProf.gender===v?"#fff":"#555"}}>{l}</div>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{fontSize:10,color:"#444",marginBottom:8}}>Land / Führerschein-Grenzwert</div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,maxHeight:220,overflowY:"auto"}}>
-                      {COUNTRIES.map(c=>(
-                        <div key={c.id} className="tap" onClick={()=>setTmpProf(p=>({...p,country:c.id}))}
-                          style={{padding:"8px 10px",borderRadius:10,fontSize:12,display:"flex",alignItems:"center",gap:8,
-                            background:tmpProf.country===c.id?"#1e2f5e":"#0d0f17",
-                            border:`1px solid ${tmpProf.country===c.id?"#2563eb":"#222638"}`,
-                            color:tmpProf.country===c.id?"#fff":"#666"}}>
-                          <span style={{fontSize:16}}>{c.flag}</span>
-                          <div>
-                            <div style={{fontWeight:500,lineHeight:1.2}}>{c.name}</div>
-                            <div style={{fontSize:9,opacity:.6}}>{c.limit===0?"0.0":c.limit}‰</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="tap" onClick={()=>setTmpProf(p=>({...p,novice:!p.novice}))}
-                    style={{background:tmpProf.novice?"#1a1a0f":"#0d0f17",border:`1px solid ${tmpProf.novice?"#ca8a04":"#222638"}`,borderRadius:10,padding:"12px 14px",display:"flex",alignItems:"center",gap:12}}>
-                    <div style={{fontSize:20}}>🔰</div>
+                <div style={{display:"flex",flexDirection:"column",maxHeight:"70vh"}}>
+                  <div style={{flex:1,minHeight:0,overflowY:"auto",WebkitOverflowScrolling:"touch",paddingRight:4,display:"grid",gap:14}}>
+                    {[
+                      {label:"Name (privat)",key:"name",type:"text"},
+                      {label:"Anzeigename im Leaderboard",key:"display_name",type:"text"},
+                      {label:"Gewicht (kg)",key:"weight",type:"number"},
+                    ].map(f=>(
+                      <div key={f.key}>
+                        <div style={{fontSize:10,color:"#444",marginBottom:6}}>{f.label}</div>
+                        <input type={f.type} value={tmpProf[f.key]} onChange={e=>setTmpProf(p=>({...p,[f.key]:f.type==="number"?+e.target.value:e.target.value}))} style={inp}/>
+                      </div>
+                    ))}
                     <div>
-                      <div style={{fontSize:13,fontWeight:500}}>Neulenker / Probezeit</div>
-                      <div style={{fontSize:11,color:"#555",marginTop:1}}>0.0‰ Limit aktiv</div>
+                      <div style={{fontSize:10,color:"#444",marginBottom:8}}>Geschlecht</div>
+                      <div style={{display:"flex",gap:10}}>
+                        {[["m","Männlich"],["f","Weiblich"]].map(([v,l])=>(
+                          <div key={v} className="tap" onClick={()=>setTmpProf(p=>({...p,gender:v}))}
+                            style={{flex:1,textAlign:"center",padding:"10px",borderRadius:10,fontSize:13,background:tmpProf.gender===v?"#2563eb":"#151826",border:`1px solid ${tmpProf.gender===v?"#2563eb":"#222638"}`,color:tmpProf.gender===v?"#fff":"#555"}}>{l}</div>
+                        ))}
+                      </div>
                     </div>
-                    <div style={{marginLeft:"auto",fontSize:18}}>{tmpProf.novice?"✅":"⬜"}</div>
+                    <div>
+                      <div style={{fontSize:10,color:"#444",marginBottom:8}}>Land / Führerschein-Grenzwert</div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,maxHeight:220,overflowY:"auto"}}>
+                        {COUNTRIES.map(c=>(
+                          <div key={c.id} className="tap" onClick={()=>setTmpProf(p=>({...p,country:c.id}))}
+                            style={{padding:"8px 10px",borderRadius:10,fontSize:12,display:"flex",alignItems:"center",gap:8,
+                              background:tmpProf.country===c.id?"#1e2f5e":"#0d0f17",
+                              border:`1px solid ${tmpProf.country===c.id?"#2563eb":"#222638"}`,
+                              color:tmpProf.country===c.id?"#fff":"#666"}}>
+                            <span style={{fontSize:16}}>{c.flag}</span>
+                            <div>
+                              <div style={{fontWeight:500,lineHeight:1.2}}>{c.name}</div>
+                              <div style={{fontSize:9,opacity:.6}}>{c.limit===0?"0.0":c.limit}‰</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="tap" onClick={()=>setTmpProf(p=>({...p,novice:!p.novice}))}
+                      style={{background:tmpProf.novice?"#1a1a0f":"#0d0f17",border:`1px solid ${tmpProf.novice?"#ca8a04":"#222638"}`,borderRadius:10,padding:"12px 14px",display:"flex",alignItems:"center",gap:12}}>
+                      <div style={{fontSize:20}}>🔰</div>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:500}}>Neulenker / Probezeit</div>
+                        <div style={{fontSize:11,color:"#555",marginTop:1}}>0.0‰ Limit aktiv</div>
+                      </div>
+                      <div style={{marginLeft:"auto",fontSize:18}}>{tmpProf.novice?"✅":"⬜"}</div>
+                    </div>
                   </div>
-                  <div className="tap" onClick={()=>{setProfile(tmpProf);setEditProfile(false);setBac(calcBac(session,tmpProf.weight,tmpProf.gender,meals));toast_("Profil gespeichert ✓");}}
-                    style={{background:"#2563eb",borderRadius:11,padding:"12px",textAlign:"center",fontWeight:700,fontSize:14}}>Speichern</div>
+                  <div className="tap" onClick={()=>{setProfile(tmpProf);setEditProfile(false);const nb = calcBac(session,tmpProf.weight,tmpProf.gender,meals);setBac(nb);toast_("Profil gespeichert ✓");}}
+                    style={{background:"#2563eb",borderRadius:11,padding:"12px",textAlign:"center",fontWeight:700,fontSize:14,marginTop:12,flexShrink:0}}>Speichern</div>
                 </div>
               )}
             </div>
