@@ -1,6 +1,5 @@
-const { useState, useEffect } = React;
+const { useState } = React;
 
-// ═══ AUTH SCREEN ═══
 function AuthScreen({ onLogin }) {
   const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
@@ -40,9 +39,10 @@ function AuthScreen({ onLogin }) {
       background: '#0a0b10',
       display: 'flex',
       flexDirection: 'column',
-      justifyContent: 'center',
       alignItems: 'center',
-      padding: '20px'
+      padding: '20px',
+      overflowY: 'auto',
+      WebkitOverflowScrolling: 'touch'
     }}>
       <div style={{
         width: '100%',
@@ -50,7 +50,9 @@ function AuthScreen({ onLogin }) {
         background: '#12141e',
         border: '1px solid #1e2132',
         borderRadius: 24,
-        padding: '32px 28px'
+        padding: '32px 28px',
+        margin: 'auto 0',
+        flexShrink: 0
       }}>
         <div style={{textAlign: 'center', marginBottom: 28}}>
           <div style={{fontSize: 48, marginBottom: 8}}>🍺</div>
@@ -187,33 +189,33 @@ function AuthScreen({ onLogin }) {
               fontSize: 14,
               fontWeight: 700,
               cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.7 : 1
+              opacity: loading ? 0.7 : 1,
+              marginBottom: 16
             }}
           >
             {loading ? 'Bitte warten...' : mode === 'login' ? 'Anmelden →' : 'Konto erstellen'}
           </button>
         </form>
 
-        <div style={{marginTop: 20, textAlign: 'center'}}>
-          <div 
-            onClick={guestMode}
-            style={{
-              fontSize: 12,
-              color: '#3b82f6',
-              cursor: 'pointer',
-              textDecoration: 'underline'
-            }}
-          >
-            Ohne Login fortfahren (Gast-Modus)
-          </div>
+        <div 
+          onClick={guestMode}
+          style={{
+            fontSize: 12,
+            color: '#3b82f6',
+            cursor: 'pointer',
+            textDecoration: 'underline',
+            textAlign: 'center',
+            padding: '8px 0'
+          }}
+        >
+          Ohne Login fortfahren (Gast-Modus)
         </div>
       </div>
     </div>
   );
 }
 
-// ═══ USER MENU ═══
-function UserMenu({ user, onLogout }) {
+function UserMenu({ user, onLogout, onShowSession }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -269,6 +271,21 @@ function UserMenu({ user, onLogout }) {
                   <div style={{fontSize: 9, color: '#16a34a', marginTop: 4}}>
                     ☁️ Synchronisiert
                   </div>
+                </div>
+                <div 
+                  onClick={() => { onShowSession(); setOpen(false); }}
+                  style={{
+                    padding: '12px 16px',
+                    fontSize: 13,
+                    color: '#3b82f6',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    borderBottom: '1px solid #1e2132'
+                  }}
+                >
+                  👥 Gruppen-Session
                 </div>
                 <div 
                   onClick={() => { onLogout(); setOpen(false); }}
