@@ -341,7 +341,7 @@ function App() {
     }
     setSessionSyncLoading(true);
     setSessionSyncError(null);
-    const { data, error } = await createSession(roomNameInput.trim());
+    const { data, error } = await createSession(roomNameInput.trim(), profile.display_name);
     setSessionSyncLoading(false);
     if (error || !data) {
       setSessionSyncError(error?.message || "Fehler beim Erstellen der Session.");
@@ -372,7 +372,7 @@ function App() {
     }
     setSessionSyncLoading(true);
     setSessionSyncError(null);
-    const { data, error } = await joinSession(code);
+    const { data, error } = await joinSession(code, profile.display_name);
     setSessionSyncLoading(false);
     if (error || !data) {
       setSessionSyncError(error?.message || "Session nicht gefunden.");
@@ -640,11 +640,11 @@ function App() {
                         </thead>
                         <tbody>
                           {leaderboard.map((row, idx) => {
-                            const isMe = user && row.user_id === user.id;
+                            const isMe = (user && row.user_id === user.id) || row.sync_id === localStorage.getItem('pt_sync_id');
                             const val = row.current_bac || 0;
                             const rowColor = bacColor(val);
                             return (
-                              <tr key={row.user_id} style={{ background: isMe ? rowColor + "12" : "transparent" }}>
+                              <tr key={row.sync_id || row.user_id} style={{ background: isMe ? rowColor + "12" : "transparent" }}>
                                 <td style={{ padding: "4px 4px", fontFamily: "'Space Mono',monospace", color: "#888" }}>{idx + 1}.</td>
                                 <td style={{ padding: "4px 4px", fontWeight: isMe ? 700 : 500 }}>
                                   {row.display_name || "Gast"}
