@@ -193,6 +193,8 @@ function App() {
   const [sessionSyncLoading, setSessionSyncLoading] = useState(false);
   const [sessionSyncError, setSessionSyncError] = useState(null);
   const [sessionSub, setSessionSub] = useState(null);
+  const [showNamePrompt, setShowNamePrompt] = useState(false);
+  const [tempDisplayName, setTempDisplayName] = useState("");
 
   // Auth Check
   useEffect(() => {
@@ -287,10 +289,14 @@ function App() {
 
   // Sync to active session
   useEffect(() => {
-    if (user && activeRoom?.roomCode) {
-      updateSessionData(activeRoom.roomCode, session, meals, bac, session.length);
+    async function sync() {
+      if (activeRoom?.roomCode) {
+        const { error } = await updateSessionData(activeRoom.roomCode, session, meals, bac, session.length, profile.display_name);
+        if (error) toast_("⚠️ Sync-Fehler: Netz prüfen!");
+      }
     }
-  }, [bac, session.length, meals.length, profile.display_name]);
+    sync();
+  }, [bac, session.length, meals.length, profile.display_name, activeRoom?.roomCode]);
 
   useEffect(() => {
     return () => {
@@ -325,8 +331,8 @@ function App() {
   }
 
   async function handleHostSession() {
-    if (!user) {
-      setSessionSyncError("Für Gruppen-Sessions bitte anmelden.");
+    if (profile.display_name === "Gast") {
+      setShowNamePrompt(true);
       return;
     }
     if (!roomNameInput.trim()) {
@@ -344,8 +350,10 @@ function App() {
     const info = { roomCode: data.room_code, roomName: data.room_name, isHost: data.is_host };
     setActiveRoom(info);
     setRoomNameInput("");
-    // Ensure initial data is synced
-    await updateSessionData(data.room_code, session, meals, bac, session.length, profile.display_name);
+
+    // Initial sync
+    const { error: syncError } = await updateSessionData(data.room_code, session, meals, bac, session.length, profile.display_name);
+    if (syncError) toast_("⚠️ Initialer Sync fehlgeschlagen");
 
     await refreshLeaderboard(info.roomCode);
     setupRealtime(info.roomCode);
@@ -353,8 +361,8 @@ function App() {
   }
 
   async function handleJoinSession() {
-    if (!user) {
-      setSessionSyncError("Für Gruppen-Sessions bitte anmelden.");
+    if (profile.display_name === "Gast") {
+      setShowNamePrompt(true);
       return;
     }
     const code = joinCodeInput.trim();
@@ -372,8 +380,10 @@ function App() {
     }
     const info = { roomCode: data.room_code, roomName: data.room_name, isHost: data.is_host };
     setActiveRoom(info);
-    // Sync current data immediately upon joining
-    await updateSessionData(code, session, meals, bac, session.length, profile.display_name);
+
+    // Initial sync
+    const { error: syncError } = await updateSessionData(code, session, meals, bac, session.length, profile.display_name);
+    if (syncError) toast_("⚠️ Sync-Fehler beim Beitreten");
 
     await refreshLeaderboard(info.roomCode);
     setupRealtime(info.roomCode);
@@ -410,8 +420,10 @@ function App() {
     setTimeout(() => setFlashIds(f => { const c = { ...f }; delete c[d.id]; return c; }), 700);
     toast_(`${d.icon} ${d.name}  →  ${nb.toFixed(2)}‰`);
 
-    if (user && activeRoom?.roomCode) {
-      updateSessionData(activeRoom.roomCode, next, meals, nb, next.length, profile.display_name);
+    if (activeRoom?.roomCode) {
+      updateSessionData(activeRoom.roomCode, next, meals, nb, next.length, profile.display_name).then(({ error }) => {
+        if (error) toast_("⚠️ Sync-Fehler: Netz prüfen!");
+      });
       refreshLeaderboard(activeRoom.roomCode);
     }
   }
@@ -427,8 +439,10 @@ function App() {
     setSession(next);
     const nb = calcBac(next, profile.weight, profile.gender, meals);
     setBac(nb);
-    if (user && activeRoom?.roomCode) {
-      updateSessionData(activeRoom.roomCode, next, meals, nb, next.length, profile.display_name);
+    if (activeRoom?.roomCode) {
+      updateSessionData(activeRoom.roomCode, next, meals, nb, next.length, profile.display_name).then(({ error }) => {
+        if (error) toast_("⚠️ Sync-Fehler: Netz prüfen!");
+      });
       refreshLeaderboard(activeRoom.roomCode);
     }
   }
@@ -535,6 +549,20 @@ function App() {
       {toast && <div style={{ position: "fixed", bottom: 86, left: "50%", transform: "translateX(-50%)", zIndex: 999, background: "#181b28", border: "1px solid #2a2e48", borderRadius: 14, padding: "10px 20px", fontSize: 13, fontWeight: 500, animation: "toast .2s ease", boxShadow: "0 8px 32px #0008", whiteSpace: "nowrap", maxWidth: "88vw" }}>{toast}</div>}
 
       {/* Gruppen-Session Modal */}
+      {showNamePrompt && (
+        <Modal title="Wer trinken wir heute?" onClose={() => setShowNamePrompt(false)}>
+          <div style={{ fontSize: 13, color: "#888", marginBottom: 16 }}>Wähle einen Namen für das Leaderboard.</div>
+          <Inp label="Anzeigename" value={tempDisplayName} onChange={setTempDisplayName} placeholder="z.B. Captain Hook" />
+          <div className="tap" onClick={() => {
+            if (!tempDisplayName.trim()) return;
+            setProfile(p => ({ ...p, display_name: tempDisplayName.trim() }));
+            setShowNamePrompt(false);
+            toast_(`Hallo ${tempDisplayName.trim()}! 👋`);
+          }} style={{ background: "#2563eb", borderRadius: 11, padding: "12px", textAlign: "center", fontWeight: 700, fontSize: 14 }}>
+            Okay, los geht's!
+          </div>
+        </Modal>
+      )}
       {groupModalOpen && (
         <Modal title="Gruppen-Session" onClose={() => setGroupModalOpen(false)}>
           {!user ? (
