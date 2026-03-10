@@ -400,22 +400,26 @@ function App() {
     toast_("Gruppen-Session verlassen");
   }
 
-  function confirmAddDrink() {
-    if (!pendingDrink) return;
-    const entry = { ...pendingDrink, ts: pendingTs, sid: Math.random().toString(36).slice(2) };
+  function addDrinkToSession(d, ts) {
+    const entry = { ...d, ts, sid: Math.random().toString(36).slice(2) };
     const next = [...session, entry].sort((a, b) => a.ts - b.ts);
     setSession(next);
     const nb = calcBac(next, profile.weight, profile.gender, meals);
     setBac(nb);
-    setFlashIds(f => ({ ...f, [pendingDrink.id]: true }));
-    setTimeout(() => setFlashIds(f => { const c = { ...f }; delete c[pendingDrink.id]; return c; }), 700);
-    toast_(`${pendingDrink.icon} ${pendingDrink.name}  →  ${nb.toFixed(2)}‰`);
-    setPendingDrink(null);
+    setFlashIds(f => ({ ...f, [d.id]: true }));
+    setTimeout(() => setFlashIds(f => { const c = { ...f }; delete c[d.id]; return c; }), 700);
+    toast_(`${d.icon} ${d.name}  →  ${nb.toFixed(2)}‰`);
 
     if (user && activeRoom?.roomCode) {
-      updateSessionData(activeRoom.roomCode, next, meals, nb, next.length);
+      updateSessionData(activeRoom.roomCode, next, meals, nb, next.length, profile.display_name);
       refreshLeaderboard(activeRoom.roomCode);
     }
+  }
+
+  function confirmAddDrink() {
+    if (!pendingDrink) return;
+    addDrinkToSession(pendingDrink, pendingTs);
+    setPendingDrink(null);
   }
 
   function removeEntry(sid) {
@@ -424,7 +428,7 @@ function App() {
     const nb = calcBac(next, profile.weight, profile.gender, meals);
     setBac(nb);
     if (user && activeRoom?.roomCode) {
-      updateSessionData(activeRoom.roomCode, next, meals, nb, next.length);
+      updateSessionData(activeRoom.roomCode, next, meals, nb, next.length, profile.display_name);
       refreshLeaderboard(activeRoom.roomCode);
     }
   }
@@ -827,8 +831,10 @@ function App() {
                 <div style={{ fontSize: 9, color: "#333", textTransform: "uppercase", letterSpacing: 2, marginBottom: 10 }}>Nochmal?</div>
                 <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
                   {[...new Map(session.map(x => [x.name, x])).values()].slice(-5).map(d => (
-                    <div key={d.name} className="tap hov" onClick={() => { setPendingDrink(d); setPendingTs(Date.now()); }}
-                      style={{ flexShrink: 0, background: "#0e1020", border: "1px solid #171a2a", borderRadius: 13, padding: "10px 13px", textAlign: "center", minWidth: 76 }}>
+                    <div key={d.name} className="tap hov" onClick={() => addDrinkToSession(d, Date.now())}
+                      style={{ flexShrink: 0, background: "#0e1020", border: "1px solid #171a2a", borderRadius: 13, padding: "10px 13px", textAlign: "center", minWidth: 76, position: "relative" }}>
+                      <div className="tap" onClick={(e) => { e.stopPropagation(); setPendingDrink(d); setPendingTs(Date.now()); }}
+                        style={{ position: "absolute", top: 5, right: 5, fontSize: 10, padding: 4, background: "#13151f", borderRadius: "50%", border: "1px solid #1e2132" }}>✏️</div>
                       <div style={{ fontSize: 22 }}>{d.icon}</div>
                       <div style={{ fontSize: 10, color: "#555", marginTop: 3, maxWidth: 68, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
                       <div style={{ fontSize: 9, fontFamily: "'Space Mono',monospace", color: bacColor(hitBac(d, profile.weight, profile.gender)), marginTop: 3 }}>+{hitBac(d, profile.weight, profile.gender).toFixed(2)}‰</div>
@@ -868,11 +874,15 @@ function App() {
                 const hit = hitBac(d, profile.weight, profile.gender);
                 return (
                   <div key={d.id} className="hov" style={{ background: flashIds[d.id] ? "#112214" : "#0e1020", border: `1px solid ${flashIds[d.id] ? "#4ade8040" : "#171a2a"}`, borderRadius: 14, padding: 12, position: "relative", transition: "background .4s,border-color .4s" }}>
-                    <div className="tap" onClick={() => setEditDrink({ ...d, abv: String(d.abv), vol: String(d.vol), kcal: String(d.kcal) })}
-                      style={{ position: "absolute", top: 8, right: 8, fontSize: 12, color: "#2a2e44", padding: 3, lineHeight: 1 }}>✏️</div>
-                    <div className="tap" onClick={() => { setPendingDrink(d); setPendingTs(Date.now()); }}>
+                    <div style={{ position: "absolute", top: 8, right: 8, display: "flex", gap: 6 }}>
+                      <div className="tap" onClick={() => setPendingDrink(d)}
+                        style={{ fontSize: 13, background: "#13151f", borderRadius: "50%", width: 24, height: 24, display: "grid", placeItems: "center", border: "1px solid #1e2132" }}>✏️</div>
+                      <div className="tap" onClick={() => setEditDrink({ ...d, abv: String(d.abv), vol: String(d.vol), kcal: String(d.kcal) })}
+                        style={{ fontSize: 13, background: "#13151f", borderRadius: "50%", width: 24, height: 24, display: "grid", placeItems: "center", border: "1px solid #1e2132" }}>⚙️</div>
+                    </div>
+                    <div className="tap" onClick={() => addDrinkToSession(d, Date.now())}>
                       <div style={{ fontSize: 26, marginBottom: 7 }}>{d.icon}</div>
-                      <div style={{ fontWeight: 600, fontSize: 12, paddingRight: 18, lineHeight: 1.3 }}>{d.name}</div>
+                      <div style={{ fontWeight: 600, fontSize: 12, paddingRight: 40, lineHeight: 1.3 }}>{d.name}</div>
                       <div style={{ fontSize: 10, color: "#3a3f5a", marginTop: 3 }}>{d.vol * 1000}ml · {d.abv}%</div>
                       <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <div style={{ fontSize: 12, fontFamily: "'Space Mono',monospace", fontWeight: 700, color: bacColor(hit) }}>+{hit.toFixed(2)}‰</div>
