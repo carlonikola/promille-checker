@@ -168,6 +168,8 @@ async function updateSessionData(roomCode, sessionData, mealsData, bac, totalGra
 
   if (user) payload.user_id = user.id;
 
+  console.log('📡 Syncing to Supabase:', payload);
+
   const { error } = await window.supabaseClient
     .from('drinking_sessions')
     .upsert(payload, { onConflict: 'room_code, sync_id' });
