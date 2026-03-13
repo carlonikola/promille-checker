@@ -74,7 +74,7 @@ async function loadProfileFromCloud() {
 }
 
 // ═══ SESSION FUNCTIONS ═══
-async function createSession(roomName, displayName) {
+async function createSession(roomName, displayName, initialDrinks = [], initialMeals = [], initialBac = 0, initialGrams = 0) {
   const user = await getUser();
   const sync_id = user ? user.id : getSyncId();
   const roomCode = Math.floor(1000 + Math.random() * 9000).toString();
@@ -83,17 +83,19 @@ async function createSession(roomName, displayName) {
     room_name: roomName,
     room_code: roomCode,
     sync_id: sync_id,
-    drinks: [],
-    meals: [],
+    drinks: initialDrinks,
+    meals: initialMeals,
     is_host: true,
     display_name: displayName || (user ? user.user_metadata?.name : 'Gast'),
-    current_bac: 0,
-    total_alcohol_grams: 0,
-    drink_count: 0,
+    current_bac: initialBac,
+    total_alcohol_grams: initialGrams,
+    drink_count: initialDrinks.length,
     created_at: new Date().toISOString()
   };
 
   if (user) payload.user_id = user.id;
+
+  console.log('📡 Creating session with payload:', payload);
 
   const { data, error } = await window.supabaseClient
     .from('drinking_sessions')
@@ -104,7 +106,7 @@ async function createSession(roomName, displayName) {
   return { data, error };
 }
 
-async function joinSession(roomCode, displayName) {
+async function joinSession(roomCode, displayName, initialDrinks = [], initialMeals = [], initialBac = 0, initialGrams = 0) {
   const user = await getUser();
   const sync_id = user ? user.id : getSyncId();
 
@@ -122,17 +124,19 @@ async function joinSession(roomCode, displayName) {
     room_name: existingSession.room_name,
     room_code: roomCode,
     sync_id: sync_id,
-    drinks: [],
-    meals: [],
+    drinks: initialDrinks,
+    meals: initialMeals,
     is_host: false,
     display_name: displayName || (user ? user.user_metadata?.name : 'Gast'),
-    current_bac: 0,
-    total_alcohol_grams: 0,
-    drink_count: 0,
+    current_bac: initialBac,
+    total_alcohol_grams: initialGrams,
+    drink_count: initialDrinks.length,
     created_at: new Date().toISOString()
   };
 
   if (user) payload.user_id = user.id;
+
+  console.log('📡 Joining session with payload:', payload);
 
   const { data, error } = await window.supabaseClient
     .from('drinking_sessions')
