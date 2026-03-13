@@ -76,14 +76,15 @@ function hitBac(d, w, g) {
   const r = g === "m" ? 0.7 : 0.6;
   return (d.vol * (d.abv / 100) * 789) / (w * r);
 }
-function bacColor(v) {
+const bacColor = (v) => {
   if (v <= 0) return "#4ade80";
   if (v < 0.3) return "#4ade80";
   if (v < 0.5) return "#a3e635";
   if (v < 0.8) return "#facc15";
   if (v < 1.2) return "#fb923c";
   return "#f87171";
-}
+};
+const getCurrentGrams = (list) => list.reduce((a, e) => a + (e.vol * 1000 * (e.abv / 100) * 0.8), 0);
 
 // ═══ COMPONENTS ═══
 function Modal({ title, onClose, children }) {
@@ -322,7 +323,15 @@ function App() {
     if (sessionSub && typeof sessionSub.unsubscribe === "function") {
       sessionSub.unsubscribe();
     }
-    const ch = subscribeToSession(roomCode, () => {
+    const ch = subscribeToSession(roomCode, (payload) => {
+      if (payload.new) {
+        setFlashIds(prev => ({ ...prev, [payload.new.sync_id]: true }));
+        setTimeout(() => setFlashIds(prev => {
+          const next = { ...prev };
+          delete next[payload.new.sync_id];
+          return next;
+        }), 1000);
+      }
       refreshLeaderboard(roomCode);
     });
     setSessionSub(ch);
@@ -403,7 +412,8 @@ function App() {
     setActiveRoom(info);
 
     // Initial sync
-    const { error: syncError } = await updateSessionData(code, session, meals, bac, session.length, profile.display_name);
+    const totalG = getCurrentGrams(session);
+    const { error: syncError } = await updateSessionData(code, session, meals, bac, totalG, session.length, profile.display_name);
     if (syncError) toast_("⚠️ Sync-Fehler beim Beitreten");
 
     await refreshLeaderboard(info.roomCode);
@@ -462,7 +472,8 @@ function App() {
     const nb = calcBac(next, profile.weight, profile.gender, meals);
     setBac(nb);
     if (activeRoom?.roomCode) {
-      updateSessionData(activeRoom.roomCode, next, meals, nb, next.length, profile.display_name).then(({ error }) => {
+      const totalG = getCurrentGrams(next);
+      updateSessionData(activeRoom.roomCode, next, meals, nb, totalG, next.length, profile.display_name).then(({ error }) => {
         if (error) toast_("⚠️ Sync-Fehler: Netz prüfen!");
       });
       refreshLeaderboard(activeRoom.roomCode);
@@ -500,7 +511,8 @@ function App() {
     const nb = calcBac(session, profile.weight, profile.gender, next);
     setBac(nb);
     if (user && activeRoom?.roomCode) {
-      updateSessionData(activeRoom.roomCode, session, next, nb, session.length);
+      const totalG = getCurrentGrams(session);
+      updateSessionData(activeRoom.roomCode, session, next, nb, totalG, session.length, profile.display_name);
       refreshLeaderboard(activeRoom.roomCode);
     }
     toast_(`${m.type.split(" ")[0]} eingetragen`);
@@ -512,7 +524,8 @@ function App() {
     const nb = calcBac(session, profile.weight, profile.gender, next);
     setBac(nb);
     if (user && activeRoom?.roomCode) {
-      updateSessionData(activeRoom.roomCode, session, next, nb, session.length);
+      const totalG = getCurrentGrams(session);
+      updateSessionData(activeRoom.roomCode, session, next, nb, totalG, session.length, profile.display_name);
       refreshLeaderboard(activeRoom.roomCode);
     }
   }
@@ -644,6 +657,15 @@ function App() {
                     </div>
                   </div>
 
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 4 }}>
+                    <div style={{ fontSize: 10, color: "#555", textTransform: "uppercase", letterSpacing: 1.5 }}>
+                      Live-Leaderboard
+                    </div>
+                    <div style={{ fontSize: 10, color: "#3b82f6", fontWeight: 600 }}>
+                      {leaderboard.length} Teilnehmer aktiv
+                    </div>
+                  </div>
+                  
                   <div style={{ background: "#0e1020", border: "1px solid #171a2a", borderRadius: 14, padding: "10px 10px", maxHeight: 260, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
                     {leaderboard.length === 0 ? (
                       <div style={{ fontSize: 12, color: "#555", textAlign: "center", padding: "14px 4px" }}>
@@ -658,7 +680,7 @@ function App() {
                             <th style={{ padding: "4px 4px", textAlign: "right" }}>{leaderboardTab === "bac" ? "Promille" : "Gramm"}</th>
                           </tr>
                         </thead>
-                        <tbody>
+                        <tbody style={{ transition: "all 0.5s ease" }}>
                           {leaderboard
                             .slice()
                             .sort((a, b) => leaderboardTab === "bac" 
@@ -667,16 +689,24 @@ function App() {
                             )
                             .map((row, idx) => {
                               const isMe = (user && row.user_id === user.id) || row.sync_id === localStorage.getItem('pt_sync_id');
+                              const isFlashing = flashIds[row.sync_id];
                               const val = leaderboardTab === "bac" ? (row.current_bac || 0) : (row.total_alcohol_grams || 0);
                               const rowColor = leaderboardTab === "bac" ? bacColor(val) : "#3b82f6";
+                              
                               return (
-                                <tr key={row.sync_id || row.user_id} style={{ background: isMe ? rowColor + "12" : "transparent" }}>
-                                  <td style={{ padding: "6px 4px", fontFamily: "'Space Mono',monospace", color: "#444" }}>{idx + 1}</td>
-                                  <td style={{ padding: "6px 4px", fontWeight: isMe ? 700 : 500 }}>
-                                    {row.display_name || "Gast"}
-                                    {row.is_host && <span style={{ fontSize: 9, color: "#facc15", marginLeft: 4 }}>HOST</span>}
+                                <tr key={row.sync_id || row.user_id} style={{ 
+                                  background: isFlashing ? rowColor + "33" : (isMe ? rowColor + "12" : "transparent"),
+                                  transition: "background 0.3s ease, transform 0.5s ease",
+                                  transform: isFlashing ? "scale(1.02)" : "scale(1)"
+                                }}>
+                                  <td style={{ padding: "8px 4px", fontFamily: "'Space Mono',monospace", color: "#444" }}>{idx + 1}</td>
+                                  <td style={{ padding: "8px 4px", fontWeight: isMe ? 700 : 500 }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                      {row.display_name || "Gast"}
+                                      {row.is_host && <span style={{ fontSize: 8, background: "#facc1522", color: "#facc15", padding: "1px 4px", borderRadius: 4 }}>HOST</span>}
+                                    </div>
                                   </td>
-                                  <td style={{ padding: "6px 4px", textAlign: "right", fontFamily: "'Space Mono',monospace", color: rowColor, fontWeight: 700 }}>
+                                  <td style={{ padding: "8px 4px", textAlign: "right", fontFamily: "'Space Mono',monospace", color: rowColor, fontWeight: 700 }}>
                                     {leaderboardTab === "bac" ? val.toFixed(2) + "‰" : Math.round(val) + "g"}
                                   </td>
                                 </tr>
@@ -1005,7 +1035,14 @@ function App() {
                 );
               })}
 
-              <div className="tap" onClick={() => { setSession([]); setMeals([]); setBac(0); setScreen("home"); if (user && activeRoom?.roomCode) { updateSessionData(activeRoom.roomCode, [], [], 0, 0); refreshLeaderboard(activeRoom.roomCode); } toast_("Session zurückgesetzt"); }}
+               <div className="tap" onClick={() => { 
+                setSession([]); setMeals([]); setBac(0); setScreen("home"); 
+                if (user && activeRoom?.roomCode) { 
+                  updateSessionData(activeRoom.roomCode, [], [], 0, 0, 0, profile.display_name); 
+                  refreshLeaderboard(activeRoom.roomCode); 
+                } 
+                toast_("Session zurückgesetzt"); 
+              }}
                 style={{ background: "#180c0c", border: "1px solid #f8717120", borderRadius: 12, padding: "12px", textAlign: "center", fontSize: 12, color: "#f87171", marginTop: 8 }}>
                 🗑 Session & Mahlzeiten zurücksetzen
               </div>
