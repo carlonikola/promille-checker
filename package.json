@@ -1,0 +1,9 @@
+{
+  "name": "promille-checker",
+  "version": "1.0.0",
+  "description": "PromilleTracker – Alkoholrechner mit Live-Sessions",
+  "scripts": {
+    "dev": "npx serve . -p 3000",
+    "start": "npx serve . -p 3000"
+  }
+}
